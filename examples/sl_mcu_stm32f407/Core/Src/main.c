@@ -6,7 +6,7 @@
  ******************************************************************************
  * @attention
  *
- * Copyright (c) 2026 STMicroelectronics.
+ * Copyright (c) 2026 STM32World <lth@stm32world.com>
  * All rights reserved.
  *
  * This software is licensed under terms that can be found in the LICENSE file
@@ -44,7 +44,7 @@
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-
+tm1638_handle_t tm1638;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -105,11 +105,37 @@ int main(void) {
 
     printf("\n\n\nStarting TM1638 Demo\n");
 
-    TM1638_Init(7);
+    // Force STB Low
+    HAL_GPIO_WritePin(TM_CS_GPIO_Port, TM_CS_Pin, GPIO_PIN_RESET);
+    HAL_Delay(1);
 
-    TM1638_DisplayDigit(1, 8);
+    // Send 0x8F (Display ON, Max Brightness) LSB First: 1111 0001 (0xF1)
+    uint8_t cmd = 0x8F;
+    for(int i = 0; i < 8; i++) {
+        HAL_GPIO_WritePin(TM_CLK_GPIO_Port, TM_CLK_Pin, GPIO_PIN_RESET);
+        HAL_Delay(1);
 
-    TM1638_SetLED(1, 1);
+        if (cmd & (1 << i))
+            HAL_GPIO_WritePin(TM_DIO_GPIO_Port, TM_DIO_Pin, GPIO_PIN_SET);
+        else
+            HAL_GPIO_WritePin(TM_DIO_GPIO_Port, TM_DIO_Pin, GPIO_PIN_RESET);
+        HAL_Delay(1);
+
+        HAL_GPIO_WritePin(TM_CLK_GPIO_Port, TM_CLK_Pin, GPIO_PIN_SET);
+        HAL_Delay(1);
+    }
+
+    // Force STB High
+    HAL_GPIO_WritePin(TM_CS_GPIO_Port, TM_CS_Pin, GPIO_PIN_SET);
+
+//    tm1638_init(&tm1638,
+//    TM_CLK_GPIO_Port, TM_CLK_Pin,
+//    TM_DIO_GPIO_Port, TM_DIO_Pin,
+//    TM_CS_GPIO_Port, TM_CS_Pin, 7); // Brightness 0-7
+//
+//    tm1638_set_digit(&tm1638, 4, 0);
+//
+//    tm1638_set_led(&tm1638, 3, 1);
 
     /* USER CODE END 2 */
 
@@ -226,31 +252,35 @@ static void MX_GPIO_Init(void) {
     /* GPIO Ports Clock Enable */
     __HAL_RCC_GPIOC_CLK_ENABLE();
     __HAL_RCC_GPIOH_CLK_ENABLE();
-    __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
 
     /*Configure GPIO pin Output Level */
     HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
 
     /*Configure GPIO pin Output Level */
-    HAL_GPIO_WritePin(GPIOC, TM_DIO_Pin | TM_CLK_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOB, TM_CLK_Pin | TM_CS_Pin | TM_DIO_Pin, GPIO_PIN_SET);
 
-    /*Configure GPIO pin Output Level */
-    HAL_GPIO_WritePin(TM_STB_GPIO_Port, TM_STB_Pin, GPIO_PIN_RESET);
-
-    /*Configure GPIO pins : LED_Pin TM_DIO_Pin TM_CLK_Pin */
-    GPIO_InitStruct.Pin = LED_Pin | TM_DIO_Pin | TM_CLK_Pin;
+    /*Configure GPIO pin : LED_Pin */
+    GPIO_InitStruct.Pin = LED_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+    HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
 
-    /*Configure GPIO pin : TM_STB_Pin */
-    GPIO_InitStruct.Pin = TM_STB_Pin;
+    /*Configure GPIO pins : TM_CLK_Pin TM_CS_Pin */
+    GPIO_InitStruct.Pin = TM_CLK_Pin | TM_CS_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    /*Configure GPIO pin : TM_DIO_Pin */
+    GPIO_InitStruct.Pin = TM_DIO_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(TM_STB_GPIO_Port, &GPIO_InitStruct);
+    HAL_GPIO_Init(TM_DIO_GPIO_Port, &GPIO_InitStruct);
 
     /* USER CODE BEGIN MX_GPIO_Init_2 */
 
