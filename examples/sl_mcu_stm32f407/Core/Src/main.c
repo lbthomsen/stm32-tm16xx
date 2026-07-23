@@ -139,7 +139,7 @@ int main(void) {
 //    // Force STB High
 //    HAL_GPIO_WritePin(TM_CS_GPIO_Port, TM_CS_Pin, GPIO_PIN_SET);
 
-    tm1638_init(&tm, 1); // Brightness 0-7
+    tm1638_init(&tm, 5); // Brightness 0-7
     tm1638_display_clear(&tm);
 
     tm1638_display_txt(&tm, "0");
@@ -151,7 +151,7 @@ int main(void) {
     /* Infinite loop */
     /* USER CODE BEGIN WHILE */
 
-    uint32_t now, next_blink = 500, next_tick = 1000, next_num = 100;
+    uint32_t now, loop_cnt = 0, next_blink = 500, next_tick = 1000, next_num = 100, led_num = 1;
 
     while (1) {
 
@@ -173,10 +173,21 @@ int main(void) {
 
         if (now >= next_tick) {
 
-            printf("Tick %lu\n", now / 1000);
+        	for (int i = 1; i <= 8; ++i) {
+        		tm1638_set_led(&tm, i, 0);
+        	}
 
+        	tm1638_set_led(&tm, led_num, 1);
+
+            printf("Tick %lu (loop = %lu)\n", now / 1000, loop_cnt);
+
+            ++led_num;
+            if (led_num > 8) led_num = 1;
+            loop_cnt = 0;
             next_tick = now + 1000;
         }
+
+        ++loop_cnt;
 
         /* USER CODE END WHILE */
 
