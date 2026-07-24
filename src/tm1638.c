@@ -292,6 +292,8 @@ uint8_t tm1638_scan_buttons(TM1638 *tm) {
     GPIO_InitStruct.Pull = GPIO_PULLUP;
     HAL_GPIO_Init(tm->dio_port, &GPIO_InitStruct);
 
+    tm1638_delay_us(5);
+
     // Read 32 bits (4 bytes) of key matrix status
     for (int8_t i = 0; i < 32; i++) {
         tm1638_clk_low(tm);

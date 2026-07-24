@@ -17,5 +17,5 @@
 ../tm16xx/tm1638.c:236:6:tm1638_display_char	4
 ../tm16xx/tm1638.c:252:6:tm1638_display_txt	6
 ../tm16xx/tm1638.c:281:9:tm1638_scan_buttons	11
-../tm16xx/tm1638.c:340:9:tm1638_read_key_blocking	5
-../tm16xx/tm1638.c:364:16:char_to_segment_code	43
+../tm16xx/tm1638.c:342:9:tm1638_read_key_blocking	5
+../tm16xx/tm1638.c:366:16:char_to_segment_code	43
