@@ -287,31 +287,31 @@ uint8_t tm1638_scan_buttons(TM1638 *tm) {
     tm1638_send_data(tm, CMD_DATA_READ);
 
     // Switch DIO to input with pull-up to sample open-collector data
-    GPIO_InitStruct.Pin = tm->dio_pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
-    HAL_GPIO_Init(tm->dio_port, &GPIO_InitStruct);
+//    GPIO_InitStruct.Pin = tm->dio_pin;
+//    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+//    GPIO_InitStruct.Pull = GPIO_NOPULL;
+//    HAL_GPIO_Init(tm->dio_port, &GPIO_InitStruct);
 
     tm1638_delay_us(5);
 
     // Read 32 bits (4 bytes) of key matrix status
     for (int8_t i = 0; i < 32; i++) {
         tm1638_clk_low(tm);
-        tm1638_delay_us(5);
+        tm1638_delay_us(1);
 
         if (HAL_GPIO_ReadPin(tm->dio_port, tm->dio_pin) == GPIO_PIN_SET) {
             raw_key_data |= (1UL << i);
         }
 
         tm1638_clk_high(tm);
-        tm1638_delay_us(5);
+        tm1638_delay_us(1);
     }
     tm1638_end_transmission(tm);
 
     // Revert DIO pin back to Output Open-Drain mode
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    HAL_GPIO_Init(tm->dio_port, &GPIO_InitStruct);
+//    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
+//    GPIO_InitStruct.Pull = GPIO_NOPULL;
+//    HAL_GPIO_Init(tm->dio_port, &GPIO_InitStruct);
 
     // Map TM1638 register bit locations to S1-S8 buttons
     if (raw_key_data & (1UL << 1))
