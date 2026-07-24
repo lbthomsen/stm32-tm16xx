@@ -153,6 +153,8 @@ int main(void) {
 
     uint32_t now, loop_cnt = 0, next_blink = 500, next_tick = 1000, next_num = 100, led_num = 1;
 
+    uint8_t buttons = 0;
+
     while (1) {
 
         now = uwTick;
@@ -164,6 +166,9 @@ int main(void) {
             tm1638_display_txt(&tm, buf);
 
             next_num = now + 100;
+
+            buttons = tm1638_scan_buttons(&tm);
+
         }
 
         if (now >= next_blink) {
@@ -179,7 +184,7 @@ int main(void) {
 
         	tm1638_set_led(&tm, led_num, 1);
 
-            printf("Tick %lu (loop = %lu)\n", now / 1000, loop_cnt);
+            printf("Tick %lu (loop = %lu btn = %d)\n", now / 1000, loop_cnt, buttons);
 
             ++led_num;
             if (led_num > 8) led_num = 1;
