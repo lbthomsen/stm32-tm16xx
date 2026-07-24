@@ -1,16 +1,23 @@
 /**
- * @file tm1638.c
- * @brief Source file for the TM1638 LED controller and keypad driver.
+ ******************************************************************************
+ * @file           : tm1638.c
+ * @brief          : TM1638 library source
+ ******************************************************************************
+ * @attention
  *
- * This file provides the implementation for driving TM1638-based modules,
- * optimized for Open-Drain GPIO mode on ARM Cortex-M MCUs (STM32 HAL).
+ * Copyright (c) 2026 STM32World <lth@stm32world.com>
+ * All rights reserved.
  *
- * @version 1.2
- * @date 2026-07-23
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
  */
 
 #include "tm1638.h"
 #include "main.h"
+#include <stdio.h>
 #include <string.h>
 
 // --- Private Constant Definitions ---
@@ -40,38 +47,43 @@ static const uint8_t DISPLAY_BRIGHTNESS_MASK = 0x07;
  * @param us Microseconds to delay.
  */
 static void tm1638_delay_us(uint32_t us) {
-    for (volatile uint32_t i = 0; i < us * 10; i++) {
-        __NOP();
+    uint32_t startTicks = DWT->CYCCNT;
+    // SystemCoreClock is 168000000 on F407.
+    // (SystemCoreClock / 1000000U) gives clock cycles per microsecond (168 cycles)
+    uint32_t ticks = us * (SystemCoreClock / 1000000U);
+
+    while ((DWT->CYCCNT - startTicks) < ticks) {
+        // Wait until clock cycles pass
     }
 }
 
 // --- Low-Level GPIO Functions ---
 
-static inline void tm1638_sdo_high(TM1638 *tm) {
+static inline void tm1638_sdo_high(tm1638_handle_t *tm) {
     HAL_GPIO_WritePin(tm->dio_port, tm->dio_pin, GPIO_PIN_SET);
 }
-static inline void tm1638_sdo_low(TM1638 *tm) {
+static inline void tm1638_sdo_low(tm1638_handle_t *tm) {
     HAL_GPIO_WritePin(tm->dio_port, tm->dio_pin, GPIO_PIN_RESET);
 }
-static inline void tm1638_stb_high(TM1638 *tm) {
+static inline void tm1638_stb_high(tm1638_handle_t *tm) {
     HAL_GPIO_WritePin(tm->stb_port, tm->stb_pin, GPIO_PIN_SET);
 }
-static inline void tm1638_stb_low(TM1638 *tm) {
+static inline void tm1638_stb_low(tm1638_handle_t *tm) {
     HAL_GPIO_WritePin(tm->stb_port, tm->stb_pin, GPIO_PIN_RESET);
 }
-static inline void tm1638_clk_high(TM1638 *tm) {
+static inline void tm1638_clk_high(tm1638_handle_t *tm) {
     HAL_GPIO_WritePin(tm->clk_port, tm->clk_pin, GPIO_PIN_SET);
 }
-static inline void tm1638_clk_low(TM1638 *tm) {
+static inline void tm1638_clk_low(tm1638_handle_t *tm) {
     HAL_GPIO_WritePin(tm->clk_port, tm->clk_pin, GPIO_PIN_RESET);
 }
 
 // --- Private Function Prototypes ---
 
-static void tm1638_start_transmission(TM1638 *tm);
-static void tm1638_end_transmission(TM1638 *tm);
-static void tm1638_send_data(TM1638 *tm, uint8_t data);
-static void tm1638_send_command(TM1638 *tm, uint8_t cmd);
+static void tm1638_start_transmission(tm1638_handle_t *tm);
+static void tm1638_end_transmission(tm1638_handle_t *tm);
+static void tm1638_send_data(tm1638_handle_t *tm, uint8_t data);
+static void tm1638_send_command(tm1638_handle_t *tm, uint8_t cmd);
 static uint8_t char_to_segment_code(char c);
 
 // --- Protocol Implementation ---
@@ -80,25 +92,25 @@ static uint8_t char_to_segment_code(char c);
  * @brief Initiates a data transmission sequence by pulling STB low.
  * Includes a setup delay to meet TM1638 timing requirements.
  */
-static void tm1638_start_transmission(TM1638 *tm) {
+static void tm1638_start_transmission(tm1638_handle_t *tm) {
     tm1638_stb_low(tm);
-    tm1638_delay_us(5); // Setup time for STB falling edge
+    tm1638_delay_us(2); // Setup time for STB falling edge
 }
 
 /**
  * @brief Terminates a transmission sequence by pulling STB high.
  * Includes hold and pulse-width delays for Open-Drain signal settling.
  */
-static void tm1638_end_transmission(TM1638 *tm) {
-    tm1638_delay_us(5); // Hold time before driving STB high
+static void tm1638_end_transmission(tm1638_handle_t *tm) {
+    tm1638_delay_us(2); // Hold time before driving STB high
     tm1638_stb_high(tm);
-    tm1638_delay_us(5); // Minimum high pulse width
+    tm1638_delay_us(2); // Minimum high pulse width
 }
 
 /**
  * @brief Sends a single command byte to the TM1638.
  */
-static void tm1638_send_command(TM1638 *tm, uint8_t cmd) {
+static void tm1638_send_command(tm1638_handle_t *tm, uint8_t cmd) {
     tm1638_start_transmission(tm);
     tm1638_send_data(tm, cmd);
     tm1638_end_transmission(tm);
@@ -108,7 +120,7 @@ static void tm1638_send_command(TM1638 *tm, uint8_t cmd) {
  * @brief Sends a byte of data to the TM1638, LSB first.
  * Delays are included to compensate for RC rise times in Open-Drain mode.
  */
-static void tm1638_send_data(TM1638 *tm, uint8_t data) {
+static void tm1638_send_data(tm1638_handle_t *tm, uint8_t data) {
     for (uint8_t i = 0; i < 8; i++) {
         tm1638_clk_low(tm);
 
@@ -134,15 +146,24 @@ static void tm1638_send_data(TM1638 *tm, uint8_t data) {
  * @param tm Pointer to the TM1638 handle.
  * @param brightness Initial brightness level (0-7).
  */
-void tm1638_init(TM1638 *tm, uint8_t brightness) {
+void tm1638_init(tm1638_handle_t *tm, GPIO_TypeDef *clk_port, uint16_t clk_pin, GPIO_TypeDef *dio_port, uint16_t dio_pin, GPIO_TypeDef *stb_port, uint16_t stb_pin, uint8_t brightness) {
+
     // Enable DWT Cycle Counter for microsecond delays
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
+    tm->clk_port = clk_port;
+    tm->clk_pin = clk_pin;
+    tm->dio_port = dio_port;
+    tm->dio_pin = dio_pin;
+    tm->stb_port = stb_port;
+    tm->stb_pin = stb_pin;
 
     // Establish idle default HIGH state on all open-drain lines
     tm1638_stb_high(tm);
     tm1638_clk_high(tm);
     tm1638_sdo_high(tm);
+
     HAL_Delay(10);
 
     tm->brightness = brightness & DISPLAY_BRIGHTNESS_MASK;
@@ -155,7 +176,7 @@ void tm1638_init(TM1638 *tm, uint8_t brightness) {
  * @param tm Pointer to the TM1638 handle.
  * @param brightness Brightness level, from 0 (dimmest) to 7 (brightest).
  */
-void tm1638_set_brightness(TM1638 *tm, uint8_t brightness) {
+void tm1638_set_brightness(tm1638_handle_t *tm, uint8_t brightness) {
     if (brightness > 7) {
         brightness = 7;
     }
@@ -168,7 +189,7 @@ void tm1638_set_brightness(TM1638 *tm, uint8_t brightness) {
  * @brief Clears all 8 segment displays and turns off all status LEDs.
  * @param tm Pointer to the TM1638 handle.
  */
-void tm1638_display_clear(TM1638 *tm) {
+void tm1638_display_clear(tm1638_handle_t *tm) {
     // Set to Auto-Increment address mode
     tm1638_send_command(tm, CMD_DATA_SET_AUTO_INC);
 
@@ -188,7 +209,7 @@ void tm1638_display_clear(TM1638 *tm) {
  * @param position Display position (1-8).
  * @param data Bitmask for segment segments (bit 7=DP, bits 6-0=G-A).
  */
-void tm1638_set_segment(TM1638 *tm, uint8_t position, uint8_t data) {
+void tm1638_set_segment(tm1638_handle_t *tm, uint8_t position, uint8_t data) {
     if (position < 1 || position > 8) {
         return;
     }
@@ -210,7 +231,7 @@ void tm1638_set_segment(TM1638 *tm, uint8_t position, uint8_t data) {
  * @param position LED position (1-8).
  * @param on True to light LED, false to turn off.
  */
-void tm1638_set_led(TM1638 *tm, uint8_t position, bool on) {
+void tm1638_set_led(tm1638_handle_t *tm, uint8_t position, bool on) {
     if (position < 1 || position > 8) {
         return;
     }
@@ -233,7 +254,7 @@ void tm1638_set_led(TM1638 *tm, uint8_t position, bool on) {
  * @param c Character to render.
  * @param dot True to enable decimal point LED on the digit.
  */
-void tm1638_display_char(TM1638 *tm, uint8_t position, char c, bool dot) {
+void tm1638_display_char(tm1638_handle_t *tm, uint8_t position, char c, bool dot) {
     if (position < 1 || position > 8) {
         return;
     }
@@ -249,7 +270,7 @@ void tm1638_display_char(TM1638 *tm, uint8_t position, char c, bool dot) {
  * @param tm Pointer to the TM1638 handle.
  * @param str Null-terminated string. Parses dots seamlessly.
  */
-void tm1638_display_txt(TM1638 *tm, const char *str) {
+void tm1638_display_txt(tm1638_handle_t *tm, const char *str) {
     char display_buf[9] = "        ";
     bool dots[8] = { false };
     int8_t len = strlen(str);
@@ -278,57 +299,53 @@ void tm1638_display_txt(TM1638 *tm, const char *str) {
  * @param tm Pointer to the TM1638 handle.
  * @return Bitmask representing buttons pressed (Bit 0 = S1 ... Bit 7 = S8).
  */
-uint8_t tm1638_scan_buttons(TM1638 *tm) {
+uint8_t tm1638_scan_buttons(tm1638_handle_t *tm) {
     uint32_t raw_key_data = 0;
     uint8_t pressed_keys = 0;
-    GPIO_InitTypeDef GPIO_InitStruct = { 0 };
 
     tm1638_start_transmission(tm);
     tm1638_send_data(tm, CMD_DATA_READ);
 
-    // Switch DIO to input with pull-up to sample open-collector data
-//    GPIO_InitStruct.Pin = tm->dio_pin;
-//    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-//    GPIO_InitStruct.Pull = GPIO_NOPULL;
-//    HAL_GPIO_Init(tm->dio_port, &GPIO_InitStruct);
+    // CRITICAL: Release DIO line so the N-MOS turns off and
+    // the external 10k pull-up can bring the line high for input reading!
+    tm1638_sdo_high(tm);
 
+    // Turnaround time delay (t_WAIT min 1us per datasheet)
     tm1638_delay_us(5);
 
     // Read 32 bits (4 bytes) of key matrix status
     for (int8_t i = 0; i < 32; i++) {
         tm1638_clk_low(tm);
-        tm1638_delay_us(1);
+        tm1638_delay_us(2); // Wait for TM1638 to output valid bit on falling edge
 
         if (HAL_GPIO_ReadPin(tm->dio_port, tm->dio_pin) == GPIO_PIN_SET) {
             raw_key_data |= (1UL << i);
         }
 
         tm1638_clk_high(tm);
-        tm1638_delay_us(1);
+        tm1638_delay_us(2);
     }
+
     tm1638_end_transmission(tm);
 
-    // Revert DIO pin back to Output Open-Drain mode
-//    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
-//    GPIO_InitStruct.Pull = GPIO_NOPULL;
-//    HAL_GPIO_Init(tm->dio_port, &GPIO_InitStruct);
+    //printf("RAW: 0x%08LX\n", raw_key_data);
 
     // Map TM1638 register bit locations to S1-S8 buttons
-    if (raw_key_data & (1UL << 1))
+    if (raw_key_data & (1UL << 0))
         pressed_keys |= (1 << 0);  // S1
-    if (raw_key_data & (1UL << 9))
+    if (raw_key_data & (1UL << 8))
         pressed_keys |= (1 << 1);  // S2
-    if (raw_key_data & (1UL << 17))
+    if (raw_key_data & (1UL << 16))
         pressed_keys |= (1 << 2);  // S3
-    if (raw_key_data & (1UL << 25))
+    if (raw_key_data & (1UL << 24))
         pressed_keys |= (1 << 3);  // S4
-    if (raw_key_data & (1UL << 5))
+    if (raw_key_data & (1UL << 4))
         pressed_keys |= (1 << 4);  // S5
-    if (raw_key_data & (1UL << 13))
+    if (raw_key_data & (1UL << 12))
         pressed_keys |= (1 << 5);  // S6
-    if (raw_key_data & (1UL << 21))
+    if (raw_key_data & (1UL << 20))
         pressed_keys |= (1 << 6);  // S7
-    if (raw_key_data & (1UL << 29))
+    if (raw_key_data & (1UL << 28))
         pressed_keys |= (1 << 7);  // S8
 
     return pressed_keys;
@@ -339,7 +356,7 @@ uint8_t tm1638_scan_buttons(TM1638 *tm) {
  * @param tm Pointer to the TM1638 handle.
  * @return Pressed key index (1-8).
  */
-uint8_t tm1638_read_key_blocking(TM1638 *tm) {
+uint8_t tm1638_read_key_blocking(tm1638_handle_t *tm) {
     uint8_t buttons = 0;
     while ((buttons = tm1638_scan_buttons(tm)) == 0) {
         HAL_Delay(20);

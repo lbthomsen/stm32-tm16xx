@@ -45,14 +45,7 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 // Create TM1638 instance
-TM1638 tm = {
-        .clk_port = TM_CLK_GPIO_Port,
-        .clk_pin = TM_CLK_Pin,
-        .dio_port = TM_DIO_GPIO_Port,
-        .dio_pin = TM_DIO_Pin,
-        .stb_port = TM_STB_GPIO_Port,
-        .stb_pin = TM_STB_Pin
-};
+tm1638_handle_t tm = {0};
 
 // Configure pins
 
@@ -116,30 +109,7 @@ int main(void) {
 
     printf("\n\n\nStarting TM1638 Demo\n");
 
-//    // Force STB Low
-//    HAL_GPIO_WritePin(TM_CS_GPIO_Port, TM_CS_Pin, GPIO_PIN_RESET);
-//    HAL_Delay(1);
-//
-//    // Send 0x8F (Display ON, Max Brightness) LSB First: 1111 0001 (0xF1)
-//    uint8_t cmd = 0x8F;
-//    for(int i = 0; i < 8; i++) {
-//        HAL_GPIO_WritePin(TM_CLK_GPIO_Port, TM_CLK_Pin, GPIO_PIN_RESET);
-//        HAL_Delay(1);
-//
-//        if (cmd & (1 << i))
-//            HAL_GPIO_WritePin(TM_DIO_GPIO_Port, TM_DIO_Pin, GPIO_PIN_SET);
-//        else
-//            HAL_GPIO_WritePin(TM_DIO_GPIO_Port, TM_DIO_Pin, GPIO_PIN_RESET);
-//        HAL_Delay(1);
-//
-//        HAL_GPIO_WritePin(TM_CLK_GPIO_Port, TM_CLK_Pin, GPIO_PIN_SET);
-//        HAL_Delay(1);
-//    }
-//
-//    // Force STB High
-//    HAL_GPIO_WritePin(TM_CS_GPIO_Port, TM_CS_Pin, GPIO_PIN_SET);
-
-    tm1638_init(&tm, 5); // Brightness 0-7
+    tm1638_init(&tm, TM_CLK_GPIO_Port, TM_CLK_Pin, TM_DIO_GPIO_Port, TM_DIO_Pin, TM_STB_GPIO_Port, TM_STB_Pin, 5); // Brightness 0-7
     tm1638_display_clear(&tm);
 
     tm1638_display_txt(&tm, "0");
@@ -178,16 +148,18 @@ int main(void) {
 
         if (now >= next_tick) {
 
-        	for (int i = 1; i <= 8; ++i) {
-        		tm1638_set_led(&tm, i, 0);
-        	}
+            for (int i = 1; i <= 8; ++i) {
+                tm1638_set_led(&tm, i, 0);
+            }
 
-        	tm1638_set_led(&tm, led_num, 1);
+            tm1638_set_led(&tm, led_num, 1);
 
-            printf("Tick %lu (loop = %lu btn = %d)\n", now / 1000, loop_cnt, buttons);
+            printf("Tick %lu (loop = %lu btn = %d)\n", now / 1000, loop_cnt,
+                    buttons);
 
             ++led_num;
-            if (led_num > 8) led_num = 1;
+            if (led_num > 8)
+                led_num = 1;
             loop_cnt = 0;
             next_tick = now + 1000;
         }
